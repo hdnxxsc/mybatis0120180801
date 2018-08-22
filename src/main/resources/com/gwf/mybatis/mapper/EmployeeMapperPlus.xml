@@ -1,0 +1,140 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.gwf.mybatis.mapper.EmployeeMapperPlus">
+
+    <select id="getEmpById" resultType="employee">
+        select *
+        from tbl_employee
+        where id = #{id}
+    </select>
+
+    <select id="getAllEmps" resultType="employee">
+        select *
+        from tbl_employee
+    </select>
+
+    <!--
+    SELECT e.id id,e.last_name last_name,e.email email,e.gender gender,e.d_id d_id,
+    d.id did,d.dept_name dept_name
+    FROM tbl_employee e,tbl_dept d WHERE e.d_id = d.id AND e.id = 1
+
+        id  last_name  email        gender    d_id     did  dept_name
+         1  gwf        gwf@163.com  1            1       1  开发部
+    -->
+    <!-- 采用级联属性的方式定义关联对象 -->
+    <resultMap id="empWithDept1" type="employee">
+        <id column="id" property="id"/>
+        <result column="last_name" property="lastName"/>
+        <result column="gender" property="gender"/>
+        <result column="email" property="email"/>
+        <result column="did" property="dept.id"/>
+        <result column="dept_name" property="dept.departmentName"/>
+    </resultMap>
+
+    <resultMap id="empWithDept2" type="employee">
+        <id column="id" property="id"/>
+        <result column="last_name" property="lastName"/>
+        <result column="gender" property="gender"/>
+        <result column="email" property="email"/>
+
+        <!-- 指定联合对象的 Javabean 对象　-->
+        <!-- property="dept":指定哪个属性是联合的对象 -->
+        <!-- javaType="department":指定这个属性对象的类型【不能省略】-->
+        <association property="dept" javaType="department">
+            <id column="did" property="id"/>
+            <result column="dept_name" property="departmentName"/>
+        </association>
+
+    </resultMap>
+    <select id="getEmpWithDeptById" resultMap="empWithDept2">
+        SELECT e.id        id,
+               e.last_name last_name,
+               e.email     email,
+               e.gender    gender,
+               e.d_id      d_id,
+               d.id        did,
+               d.dept_name dept_name
+        FROM tbl_employee e,
+             tbl_dept d
+        WHERE e.d_id = d.id
+          AND e.id = #{id}
+    </select>
+
+    <!-- 使用 association 进行分步查询
+        1.先根据员工 id 查询员工信息
+        2.根据查询出的员工信息中的 d_id 值查询部门表得到部门信息
+        3.将查询的部门信息设置到员工属性中
+    -->
+
+    <resultMap id="empWithDeptByIdStepByStep" type="employee">
+        <id column="id" property="id"/>
+        <result column="last_name" property="lastName"/>
+        <result column="email" property="email"/>
+        <result column="gender" property="gender"/>
+
+        <!-- association 定义关联对象封装规则
+                select:表明当前属性 property="dept" 是通过调用  select 指定的方法查出的结果
+                column: column="d_id" 指定将当前对象的哪一个属性值传递给 select 指定的方法
+
+                流程：
+                    使用select指定的方法（传入column指定的这列参数的值）查出对象，并封装给property指定的属性
+        -->
+        <association property="dept" select="com.gwf.mybatis.mapper.DepartmentMapper.getDeptById" column="d_id"/>
+    </resultMap>
+    <!--<select id="getEmpWithDeptByIdStepByStep" resultMap="empWithDeptByIdStepByStep">-->
+    <select id="getEmpWithDeptByIdStepByStep" resultMap="myEmpDiscriminator">
+        select *
+        from tbl_employee
+        where id = #{id}
+    </select>
+
+    <!--
+        List<Employee> getEmpsByDeptId(Integer deptId);
+    -->
+    <select id="getEmpsByDeptId" resultType="employee">
+        select *
+        from tbl_employee
+        where d_id = #{deptId}
+    </select>
+
+    <!--
+        延迟加载
+        employee ==> department
+    -->
+
+    <!-- =======================鉴别器============================ -->
+    <!-- <discriminator javaType=""></discriminator>
+        鉴别器：mybatis可以使用discriminator判断某列的值，然后根据某列的值改变封装行为
+        封装Employee：
+            如果查出的是女生：就把部门信息查询出来，否则不查询；
+            如果是男生，把last_name这一列的值赋值给email;
+     -->
+    <resultMap id="myEmpDiscriminator" type="employee">
+        <id column="id" property="id"/>
+        <result column="last_name" property="lastName"/>
+        <result column="email" property="email"/>
+        <result column="gender" property="gender"/>
+        <!-- column：指定判定的列名
+             javaType：列值对应的java类型  -->
+        <discriminator javaType="string" column="gender">
+            <!--女生  resultType:指定封装的结果类型；不能缺少。/resultMap-->
+            <case value="0" resultType="employee">
+                <association property="dept"
+                             select="com.gwf.mybatis.mapper.DepartmentMapper.getDeptById"
+                             column="d_id">
+                </association>
+            </case>
+            <!--男生 ;如果是男生，把last_name这一列的值赋值给email; -->
+            <case value="1" resultType="employee">
+                <id column="id" property="id"/>
+                <result column="last_name" property="lastName"/>
+                <result column="last_name" property="email"/>
+                <result column="gender" property="gender"/>
+            </case>
+        </discriminator>
+    </resultMap>
+
+</mapper>
